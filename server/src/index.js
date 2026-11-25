@@ -26,6 +26,15 @@ import {
   getSettings,
   saveSettings,
   getSummary,
+  listRooms,
+  createRoom,
+  updateRoom,
+  deleteRoom,
+  getRentDesk,
+  getRentReport,
+  createTenant,
+  leaveTenant,
+  payRent,
 } from './db.js';
 
 init();
@@ -145,6 +154,44 @@ app.put('/api/settings', asyncRoute(async (req, res) => {
 app.get('/api/summary', (req, res) => {
   res.json(getSummary(req.query.from, req.query.to));
 });
+
+app.get('/api/rooms', (req, res) => {
+  res.json({ rooms: listRooms() });
+});
+
+app.post('/api/rooms', asyncRoute(async (req, res) => {
+  res.status(201).json({ room: createRoom(req.body || {}) });
+}));
+
+app.put('/api/rooms/:id', asyncRoute(async (req, res) => {
+  res.json({ room: updateRoom(Number(req.params.id), req.body || {}) });
+}));
+
+app.delete('/api/rooms/:id', asyncRoute(async (req, res) => {
+  deleteRoom(Number(req.params.id));
+  res.json({ ok: true });
+}));
+
+app.get('/api/rent', (req, res) => {
+  res.json(getRentDesk(req.query.from, req.query.to));
+});
+
+app.get('/api/rent/report', (req, res) => {
+  res.json(getRentReport(req.query.from, req.query.to));
+});
+
+app.post('/api/rent/tenants', asyncRoute(async (req, res) => {
+  res.status(201).json({ person: createTenant(req.body || {}) });
+}));
+
+app.post('/api/rent/tenants/:id/leave', asyncRoute(async (req, res) => {
+  leaveTenant(Number(req.params.id));
+  res.json({ ok: true });
+}));
+
+app.post('/api/rent/payments', asyncRoute(async (req, res) => {
+  res.status(201).json(payRent(req.body || {}));
+}));
 
 if (fs.existsSync(dist)) {
   app.use(express.static(dist));

@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth';
 import { useI18n } from '../i18n';
-import { IconChart, IconDrop, IconGear, IconGrid, IconReceipt, IconSplit } from './Icons';
+import { IconChart, IconDrop, IconGear, IconGrid, IconReceipt, IconRoom, IconSplit } from './Icons';
 import LanguageSwitch from './LanguageSwitch';
 
 const links = [
@@ -9,6 +9,7 @@ const links = [
   { to: '/wash', label: 'nav.wash', icon: IconDrop },
   { to: '/expenses', label: 'nav.expenses', icon: IconReceipt },
   { to: '/distribution', label: 'nav.distribution', icon: IconSplit },
+  { to: '/rent', label: 'nav.rent', icon: IconRoom },
   { to: '/reports', label: 'nav.reports', icon: IconChart },
   { to: '/settings', label: 'nav.settings', icon: IconGear },
 ];

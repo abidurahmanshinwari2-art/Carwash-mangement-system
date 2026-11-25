@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { api } from '../api';
 import { useAuth } from '../auth';
 import { Banner } from '../components/Banner';
 import PeriodBar from '../components/PeriodBar';
@@ -31,16 +32,45 @@ export default function Reports() {
     ['income', t('reports.income')],
     ['profit', t('reports.profit')],
     ['distribution', t('reports.distribution')],
+    ['rent', t('reports.rent')],
   ];
   const tab = tabs.some(([key]) => key === params.get('tab')) ? params.get('tab') : 'expenses';
   const { data, error, loading } = useSummary(period.from, period.to);
+  const [rent, setRent] = useState(null);
+  const [rentError, setRentError] = useState('');
   const title = tabs.find(([key]) => key === tab)?.[1] || t('reports.title');
+
+  useEffect(() => {
+    const query = new URLSearchParams();
+    if (period.from) query.set('from', period.from);
+    if (period.to) query.set('to', period.to);
+    let cancel = false;
+    api(`/api/rent/report?${query.toString()}`)
+      .then((result) => { if (!cancel) setRent(result); })
+      .catch((err) => { if (!cancel) setRentError(err.message); });
+    return () => { cancel = true; };
+  }, [period.from, period.to]);
 
   function shown(value, withTime = true) {
     return formatShown(value, calendar, lang, withTime);
   }
 
+  function statusText(status) {
+    if (status === 'paid') return t('rent.paid');
+    if (status === 'partial') return t('rent.partialStatus');
+    return t('rent.unpaid');
+  }
+
   function exportCsv() {
+    if (tab === 'rent') {
+      if (!rent) return;
+      const stamp = `${period.from || 'start'}_${period.to || 'end'}`;
+      download(`zamzam-room-rent-${stamp}.csv`, [
+        [t('rent.person'), t('rent.phone'), t('rent.room'), t('rent.fee'), t('rent.paidMonth'), t('rent.remaining'), t('rent.status')],
+        ...rent.people.map((row) => [row.personName, row.phone, row.roomName, row.monthlyFee, row.paidThisMonth, row.remaining, statusText(row.status)]),
+      ]);
+      return;
+    }
     if (!data) return;
     const stamp = `${period.from || 'start'}_${period.to || 'end'}`;
     if (tab === 'expenses') {
@@ -79,8 +109,8 @@ export default function Reports() {
           <p className="lede">{t('reports.lede')}</p>
         </div>
         <div className="row-actions no-print">
-          <button type="button" className="btn ghost" onClick={() => window.print()} disabled={!data}>{t('common.print')}</button>
-          <button type="button" className="btn primary" onClick={exportCsv} disabled={!data}>{t('common.download')}</button>
+          <button type="button" className="btn ghost" onClick={() => window.print()} disabled={tab === 'rent' ? !rent : !data}>{t('common.print')}</button>
+          <button type="button" className="btn primary" onClick={exportCsv} disabled={tab === 'rent' ? !rent : !data}>{t('common.download')}</button>
         </div>
       </div>
       <PeriodBar from={period.from} to={period.to} onChange={setPeriod} />
@@ -96,9 +126,10 @@ export default function Reports() {
           </button>
         ))}
       </div>
-      <Banner error={error} />
-      {loading && !data ? <p className="muted">{t('reports.preparing')}</p> : null}
-      {data ? (
+      <Banner error={tab === 'rent' ? rentError : error} />
+      {tab !== 'rent' && loading && !data ? <p className="muted">{t('reports.preparing')}</p> : null}
+      {tab === 'rent' ? <RentReport rent={rent} currency={currency} businessName={businessName} statusText={statusText} /> : null}
+      {tab !== 'rent' && data ? (
         <article className="card report-sheet">
           <header className="report-head">
             <p className="eyebrow">{businessName}</p>
@@ -112,6 +143,57 @@ export default function Reports() {
         </article>
       ) : null}
     </div>
+  );
+}
+
+function RentReport({ rent, currency, businessName, statusText }) {
+  const { t } = useI18n();
+  if (!rent) return <p className="muted">{t('reports.preparing')}</p>;
+  const people = rent.people || [];
+  return (
+    <article className="card report-sheet">
+      <header className="report-head">
+        <p className="eyebrow">{businessName}</p>
+        <h2>{t('reports.rent')}</h2>
+        <DateRange from={rent.from} to={rent.to} />
+        <p className="muted">{t('reports.rentNote')}</p>
+      </header>
+      <div className="mini-stats">
+        <div><span>{t('rent.unpaid')}</span><strong>{rent.counts.unpaid}</strong></div>
+        <div><span>{t('rent.partialStatus')}</span><strong>{rent.counts.partial}</strong></div>
+        <div><span>{t('rent.paid')}</span><strong>{rent.counts.paid}</strong></div>
+        <div><span>{t('rent.monthIncome')}</span><strong>{money(rent.collected, currency)}</strong></div>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>{t('rent.person')}</th>
+              <th>{t('rent.phone')}</th>
+              <th>{t('rent.room')}</th>
+              <th>{t('rent.fee')}</th>
+              <th>{t('rent.paidMonth')}</th>
+              <th>{t('rent.remaining')}</th>
+              <th>{t('rent.status')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {people.map((person) => (
+              <tr key={person.id}>
+                <td>{person.personName}</td>
+                <td>{person.phone || '—'}</td>
+                <td>{person.roomName}</td>
+                <td>{money(person.monthlyFee, currency)}</td>
+                <td>{money(person.paidThisMonth, currency)}</td>
+                <td>{money(person.remaining, currency)}</td>
+                <td>{statusText(person.status)}</td>
+              </tr>
+            ))}
+            {people.length === 0 ? <tr><td colSpan="7" className="muted">{t('reports.noRent')}</td></tr> : null}
+          </tbody>
+        </table>
+      </div>
+    </article>
   );
 }
 

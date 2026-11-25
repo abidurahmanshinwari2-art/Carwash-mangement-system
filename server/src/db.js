@@ -193,6 +193,38 @@ export function init() {
 
     CREATE INDEX IF NOT EXISTS idx_washes_when ON washes(washed_at);
     CREATE INDEX IF NOT EXISTS idx_expenses_when ON expenses(expense_at);
+
+    CREATE TABLE IF NOT EXISTS rooms (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+      rent REAL NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+      created_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS tenants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      room_id INTEGER REFERENCES rooms(id) ON DELETE RESTRICT,
+      room_name TEXT NOT NULL,
+      person_name TEXT NOT NULL,
+      phone TEXT,
+      note TEXT,
+      monthly_fee REAL NOT NULL,
+      moved_in TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+      left_at TEXT
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS rent_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+      amount REAL NOT NULL,
+      paid_at TEXT NOT NULL,
+      note TEXT
+    ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS idx_rent_paid ON rent_payments(paid_at);
+    CREATE INDEX IF NOT EXISTS idx_tenants_room ON tenants(room_id, active);
   `);
   seed();
 }
@@ -513,5 +545,250 @@ export function getSummary(fromInput, toInput) {
     expenseRows,
     distribution: distribute(netProfit, investors),
     percentageTotal,
+  };
+}
+
+function optionalPhone(value) {
+  const text = String(value ?? '').trim().replace(/\s+/g, ' ');
+  if (text.length > 40) throw new HttpError(400, 'Phone is too long', 'tooLong.phone');
+  return text || null;
+}
+
+function rentStatus(paid, due) {
+  const paidCents = Math.round(Number(paid) * 100);
+  const dueCents = Math.round(Number(due) * 100);
+  if (dueCents <= 0) return 'paid';
+  if (paidCents <= 0) return 'unpaid';
+  if (paidCents < dueCents) return 'partial';
+  return 'paid';
+}
+
+function rentBounds(from, to) {
+  let start = assertYmd(from);
+  let end = assertYmd(to);
+  if (!start || !end) {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    start = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
+    end = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  }
+  return { from: start, to: end, startAt: `${start}T00:00:00`, endAt: nextDayStart(end) };
+}
+
+function mapRoom(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    rent: money(row.rent),
+    active: Boolean(row.active),
+    createdAt: row.created_at,
+  };
+}
+
+export function listRooms() {
+  return db.prepare(`
+    SELECT id, name, rent, active, created_at
+    FROM rooms
+    ORDER BY name COLLATE NOCASE
+  `).all().map(mapRoom);
+}
+
+export function createRoom(body) {
+  const name = requireText(body.name, 'roomName', 80);
+  const rent = requireAmount(body.rent, 'roomRent', { allowZero: true });
+  try {
+    const info = db.prepare(`
+      INSERT INTO rooms (name, rent, active, created_at) VALUES (?, ?, 1, ?)
+    `).run(name, rent, stamp());
+    return mapRoom(db.prepare('SELECT * FROM rooms WHERE id = ?').get(info.lastInsertRowid));
+  } catch (error) {
+    if (String(error.message).includes('UNIQUE')) {
+      throw new HttpError(400, 'That room already exists', 'room.duplicate');
+    }
+    throw error;
+  }
+}
+
+export function updateRoom(id, body) {
+  const current = db.prepare('SELECT * FROM rooms WHERE id = ?').get(id);
+  if (!current) throw new HttpError(404, 'Room not found', 'room.missing');
+  const name = requireText(body.name, 'roomName', 80);
+  const rent = requireAmount(body.rent, 'roomRent', { allowZero: true });
+  try {
+    db.prepare('UPDATE rooms SET name = ?, rent = ? WHERE id = ?').run(name, rent, id);
+  } catch (error) {
+    if (String(error.message).includes('UNIQUE')) {
+      throw new HttpError(400, 'That room already exists', 'room.duplicate');
+    }
+    throw error;
+  }
+  return mapRoom(db.prepare('SELECT * FROM rooms WHERE id = ?').get(id));
+}
+
+export function deleteRoom(id) {
+  const current = db.prepare('SELECT id FROM rooms WHERE id = ?').get(id);
+  if (!current) throw new HttpError(404, 'Room not found', 'room.missing');
+  const used = db.prepare('SELECT COUNT(*) AS count FROM tenants WHERE room_id = ?').get(id).count;
+  if (used) throw new HttpError(400, 'This room is on the rent screen, so it stays.', 'room.inUse');
+  db.prepare('DELETE FROM rooms WHERE id = ?').run(id);
+}
+
+function paidByTenant(bounds) {
+  const rows = db.prepare(`
+    SELECT tenant_id, COALESCE(SUM(amount), 0) AS paid, COUNT(*) AS count
+    FROM rent_payments
+    WHERE paid_at >= ? AND paid_at < ?
+    GROUP BY tenant_id
+  `).all(bounds.startAt, bounds.endAt);
+  return new Map(rows.map((row) => [row.tenant_id, { paid: money(row.paid), count: Number(row.count) }]));
+}
+
+function personView(row, paid) {
+  const monthlyFee = money(row.monthly_fee);
+  const paidThisMonth = money(paid?.paid || 0);
+  const remaining = money(Math.max(0, monthlyFee - paidThisMonth));
+  return {
+    id: row.id,
+    roomId: row.room_id,
+    roomName: row.live_room_name || row.room_name,
+    personName: row.person_name,
+    phone: row.phone || '',
+    note: row.note || '',
+    monthlyFee,
+    movedIn: row.moved_in,
+    paidThisMonth,
+    remaining,
+    status: rentStatus(paidThisMonth, monthlyFee),
+  };
+}
+
+export function getRentDesk(from, to) {
+  const bounds = rentBounds(from, to);
+  const paid = paidByTenant(bounds);
+  const people = db.prepare(`
+    SELECT t.*, r.name AS live_room_name
+    FROM tenants t
+    LEFT JOIN rooms r ON r.id = t.room_id
+    WHERE t.active = 1
+    ORDER BY t.person_name COLLATE NOCASE
+  `).all().map((row) => personView(row, paid.get(row.id)));
+  const totals = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS income, COUNT(*) AS count
+    FROM rent_payments
+    WHERE paid_at >= ? AND paid_at < ?
+  `).get(bounds.startAt, bounds.endAt);
+  return {
+    from: bounds.from,
+    to: bounds.to,
+    rooms: listRooms(),
+    cards: {
+      rentedRooms: people.length,
+      monthIncome: money(totals.income),
+      paymentsCollected: Number(totals.count) || 0,
+      partialPeople: people.filter((person) => person.status === 'partial').length,
+    },
+    people,
+  };
+}
+
+export function getRentReport(from, to) {
+  const bounds = rentBounds(from, to);
+  const paid = paidByTenant(bounds);
+  const people = db.prepare(`
+    SELECT t.*, r.name AS live_room_name
+    FROM tenants t
+    LEFT JOIN rooms r ON r.id = t.room_id
+    WHERE t.moved_in <= ?
+      AND (t.active = 1 OR t.left_at IS NULL OR t.left_at >= ?)
+    ORDER BY room_name COLLATE NOCASE, person_name COLLATE NOCASE
+  `).all(bounds.to, bounds.startAt).map((row) => personView(row, paid.get(row.id)));
+  return {
+    from: bounds.from,
+    to: bounds.to,
+    people,
+    counts: {
+      unpaid: people.filter((person) => person.status === 'unpaid').length,
+      partial: people.filter((person) => person.status === 'partial').length,
+      paid: people.filter((person) => person.status === 'paid').length,
+    },
+    collected: money(people.reduce((sum, person) => sum + person.paidThisMonth, 0)),
+  };
+}
+
+export function createTenant(body) {
+  const room = db.prepare('SELECT * FROM rooms WHERE id = ?').get(Number(body.roomId));
+  if (!room || !room.active) throw new HttpError(400, 'Choose a room that is saved in Settings', 'room.missing');
+  const taken = db.prepare('SELECT id FROM tenants WHERE room_id = ? AND active = 1').get(room.id);
+  if (taken) throw new HttpError(400, 'This room is already given to someone', 'tenant.occupied');
+  const personName = requireText(body.personName, 'personName', 80);
+  const phone = optionalPhone(body.phone);
+  const note = optionalNote(body.note);
+  const monthlyFee = body.monthlyFee == null || body.monthlyFee === ''
+    ? money(room.rent)
+    : requireAmount(body.monthlyFee, 'roomRent', { allowZero: true });
+  const movedIn = assertYmd(body.movedIn) || stamp().slice(0, 10);
+  const info = db.prepare(`
+    INSERT INTO tenants (
+      room_id, room_name, person_name, phone, note, monthly_fee, moved_in, active
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+  `).run(room.id, room.name, personName, phone, note, monthlyFee, movedIn);
+  const row = db.prepare(`
+    SELECT t.*, r.name AS live_room_name
+    FROM tenants t
+    LEFT JOIN rooms r ON r.id = t.room_id
+    WHERE t.id = ?
+  `).get(info.lastInsertRowid);
+  return personView(row, { paid: 0, count: 0 });
+}
+
+export function leaveTenant(id) {
+  const row = db.prepare('SELECT * FROM tenants WHERE id = ?').get(id);
+  if (!row) throw new HttpError(404, 'Person not found', 'tenant.missing');
+  if (!row.active) throw new HttpError(400, 'This person already left the room', 'tenant.left');
+  db.prepare('UPDATE tenants SET active = 0, left_at = ? WHERE id = ?').run(stamp(), id);
+}
+
+export function payRent(body) {
+  const tenant = db.prepare(`
+    SELECT t.*, r.name AS live_room_name
+    FROM tenants t
+    LEFT JOIN rooms r ON r.id = t.room_id
+    WHERE t.id = ?
+  `).get(Number(body.tenantId));
+  if (!tenant || !tenant.active) throw new HttpError(404, 'Person not found', 'tenant.missing');
+  const amount = requireAmount(body.amount, 'rentPay');
+  const paidAt = normalizeWhen(body.paidAt);
+  const note = optionalNote(body.note);
+  const info = db.prepare(`
+    INSERT INTO rent_payments (tenant_id, amount, paid_at, note) VALUES (?, ?, ?, ?)
+  `).run(tenant.id, amount, paidAt, note);
+  const bounds = rentBounds(body.from, body.to);
+  const month = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS paid
+    FROM rent_payments
+    WHERE tenant_id = ? AND paid_at >= ? AND paid_at < ?
+  `).get(tenant.id, bounds.startAt, bounds.endAt);
+  const view = personView(tenant, { paid: month.paid, count: 0 });
+  return {
+    payment: {
+      id: Number(info.lastInsertRowid),
+      tenantId: tenant.id,
+      amount,
+      paidAt,
+      note: note || '',
+    },
+    receipt: {
+      id: Number(info.lastInsertRowid),
+      personName: view.personName,
+      phone: view.phone,
+      roomName: view.roomName,
+      note: note || '',
+      amount,
+      paidAt,
+      monthlyFee: view.monthlyFee,
+      paidThisMonth: view.paidThisMonth,
+      remaining: view.remaining,
+      status: view.status,
+    },
   };
 }

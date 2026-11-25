@@ -68,6 +68,13 @@ function monthName(kind, lang, month) {
   return pack[lang]?.[month - 1] || pack.en[month - 1];
 }
 
+export function formatMonthYear(date, kind, lang) {
+  const calendar = kind === 'shamsi' || kind === 'hijri' ? kind : 'meladi';
+  if (calendar === 'meladi') return `${monthName('meladi', lang, date.getMonth() + 1)} ${date.getFullYear()}`;
+  const parts = calendarParts(date, calendar === 'shamsi' ? 'persian' : 'islamic-umalqura');
+  return `${monthName(calendar, lang, parts.month)} ${parts.year}`;
+}
+
 export function formatCalendar(date, kind, lang) {
   if (kind === 'meladi') {
     return `${date.getDate()} ${monthName('meladi', lang, date.getMonth() + 1)} ${date.getFullYear()}`;

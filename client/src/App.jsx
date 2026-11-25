@@ -8,6 +8,7 @@ import WashNow from './pages/WashNow';
 import Expenses from './pages/Expenses';
 import Distribution from './pages/Distribution';
 import Reports from './pages/Reports';
+import Rent from './pages/Rent';
 import Settings from './pages/Settings';
 
 function Splash() {
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="/expenses" element={<Expenses />} />
           <Route path="/distribution" element={<Distribution />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/rent" element={<Rent />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

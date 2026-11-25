@@ -201,6 +201,9 @@ input:focus, select:focus { border-color: var(--teal); box-shadow: 0 0 0 4px rgb
 .dot-2 { background: #3d5a80; }
 
 .wash-layout { grid-template-columns: 1fr 320px; align-items: start; }
+.rent-layout { display: grid; gap: 16px; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); align-items: start; }
+.rent-search { margin: 0 0 16px; }
+.rent-search input { width: 100%; }
 .wash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin: 12px 0 16px; }
 .wash-card {
   background: white; border-radius: 18px; padding: 16px; box-shadow: var(--shadow);
@@ -246,7 +249,7 @@ tfoot td { font-weight: 750; }
 .compact { margin-bottom: 14px; }
 
 @media (max-width: 980px) {
-  .login, .shell, .metrics, .split, .wash-layout, .settings-grid, .partner-grid, .equation { grid-template-columns: 1fr; }
+  .login, .shell, .metrics, .split, .wash-layout, .rent-layout, .settings-grid, .partner-grid, .equation { grid-template-columns: 1fr; }
   .login-photo { min-height: 42vh; }
   .sidebar { position: sticky; top: 0; height: auto; z-index: 2; }
   .nav { grid-auto-flow: column; overflow: auto; }
@@ -256,8 +259,37 @@ tfoot td { font-weight: 750; }
   .settings-span { grid-column: auto; }
 }
 
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pill.unpaid { background: #fde8e8; color: #9b2c2c; }
+.pill.partial { background: #fff4d6; color: #8a5a00; }
+.pill.paid { background: #e5f6ea; color: #1e7a3a; }
+.modal-back {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(10, 16, 28, 0.45);
+}
+.pay-box, .receipt-sheet { width: min(460px, 100%); }
+.receipt-sheet { border: 1px dashed #1a2744; }
+.receipt-sheet h2, .receipt-brand { text-align: center; margin: 0; }
+.receipt-lines { display: grid; gap: 8px; margin: 14px 0; }
+.receipt-lines div { display: flex; justify-content: space-between; gap: 12px; }
+.receipt-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
 @media print {
   .sidebar, .no-print, .storage-note { display: none !important; }
   .shell, .main { display: block; padding: 0; }
   body, .card { background: white; box-shadow: none; }
+  .modal-back { position: static; background: white; padding: 0; }
 }

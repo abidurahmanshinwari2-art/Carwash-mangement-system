@@ -50,6 +50,14 @@ export function IconChart() {
   );
 }
 
+export function IconRoom() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="currentColor" d="M4 20V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v15h2v2H4v-2h0zm2-1h7V6H6v13zm5-6h2v2h-2v-2z" />
+    </svg>
+  );
+}
+
 export function IconGear() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">

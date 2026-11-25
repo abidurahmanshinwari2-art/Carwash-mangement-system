@@ -17,16 +17,21 @@ export default function Settings() {
   const [drafts, setDrafts] = useState({});
   const [itemName, setItemName] = useState('');
   const [itemCost, setItemCost] = useState('');
+  const [rooms, setRooms] = useState([]);
+  const [roomDrafts, setRoomDrafts] = useState({});
+  const [roomName, setRoomName] = useState('');
+  const [roomRent, setRoomRent] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
   async function load() {
-    const [settings, partnerData, itemData] = await Promise.all([
+    const [settings, partnerData, itemData, roomData] = await Promise.all([
       api('/api/settings'),
       api('/api/investors'),
       api('/api/items'),
+      api('/api/rooms'),
     ]);
     setBusinessName(settings.businessName);
     setSymbol(settings.currency);
@@ -34,6 +39,8 @@ export default function Settings() {
     setInvestors(partnerData.investors);
     setItems(itemData.items);
     setDrafts(Object.fromEntries(itemData.items.map((item) => [item.id, { name: item.name, cost: String(item.cost), active: item.active }])));
+    setRooms(roomData.rooms);
+    setRoomDrafts(Object.fromEntries(roomData.rooms.map((room) => [room.id, { name: room.name, rent: String(room.rent) }])));
   }
 
   useEffect(() => {
@@ -77,6 +84,42 @@ export default function Settings() {
       });
       setInvestors(result.investors);
       setMessage(t('settings.partnersSaved'));
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function addRoom(event) {
+    event.preventDefault();
+    setError('');
+    setMessage('');
+    try {
+      await api('/api/rooms', { method: 'POST', body: JSON.stringify({ name: roomName, rent: roomRent }) });
+      setRoomName('');
+      setRoomRent('');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function saveRoom(id) {
+    setError('');
+    setMessage('');
+    try {
+      await api(`/api/rooms/${id}`, { method: 'PUT', body: JSON.stringify(roomDrafts[id]) });
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function removeRoom(room) {
+    if (!window.confirm(t('settings.deleteAsk', { name: room.name }))) return;
+    setError('');
+    try {
+      await api(`/api/rooms/${room.id}`, { method: 'DELETE' });
+      await load();
     } catch (err) {
       setError(err.message);
     }
@@ -209,6 +252,52 @@ export default function Settings() {
           <p className={percentReady ? 'ok-line' : 'warn-line'}>{t('settings.totalMust', { value: percent(percentCents / 100) })}</p>
           <button className="btn primary" type="submit" disabled={!percentReady}>{t('settings.savePartners')}</button>
         </form>
+
+        <section className="card stack settings-span">
+          <h2>{t('settings.rooms')}</h2>
+          <p className="muted">{t('settings.roomsHint')}</p>
+          <form className="inline-add" onSubmit={addRoom}>
+            <input value={roomName} onChange={(event) => setRoomName(event.target.value)} placeholder={t('settings.roomPlaceholder')} required maxLength={80} />
+            <input type="number" min="0" step="0.01" value={roomRent} onChange={(event) => setRoomRent(event.target.value)} placeholder={t('settings.rentPlaceholder')} required />
+            <button className="btn gold" type="submit">{t('settings.addRoom')}</button>
+          </form>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>{t('common.name')}</th>
+                  <th>{t('settings.roomFee')}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {rooms.map((room) => (
+                  <tr key={room.id}>
+                    <td>
+                      <input
+                        value={roomDrafts[room.id]?.name || ''}
+                        onChange={(event) => setRoomDrafts((current) => ({ ...current, [room.id]: { ...current[room.id], name: event.target.value } }))}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={roomDrafts[room.id]?.rent ?? ''}
+                        onChange={(event) => setRoomDrafts((current) => ({ ...current, [room.id]: { ...current[room.id], rent: event.target.value } }))}
+                      />
+                    </td>
+                    <td className="row-actions">
+                      <button type="button" className="btn ghost tiny" onClick={() => saveRoom(room.id)}>{t('common.save')}</button>
+                      <button type="button" className="btn ghost tiny" onClick={() => removeRoom(room)}>{t('common.delete')}</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
 
         <section className="card stack settings-span">
           <h2>{t('settings.items')}</h2>
