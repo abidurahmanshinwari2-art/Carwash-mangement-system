@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { currentRevision, restartDesk, updateFromGitHub } from './update.js';
 import {
   HttpError,
   init,
@@ -191,6 +192,16 @@ app.post('/api/rent/tenants/:id/leave', asyncRoute(async (req, res) => {
 
 app.post('/api/rent/payments', asyncRoute(async (req, res) => {
   res.status(201).json(payRent(req.body || {}));
+}));
+
+app.get('/api/system', asyncRoute(async (req, res) => {
+  res.json(await currentRevision());
+}));
+
+app.post('/api/system/update', asyncRoute(async (req, res) => {
+  const result = await updateFromGitHub();
+  res.json(result);
+  if (result.restart) restartDesk();
 }));
 
 if (fs.existsSync(dist)) {

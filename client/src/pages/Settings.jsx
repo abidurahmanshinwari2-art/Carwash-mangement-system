@@ -23,6 +23,8 @@ export default function Settings() {
   const [roomRent, setRoomRent] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [revision, setRevision] = useState(null);
+  const [updating, setUpdating] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
@@ -45,6 +47,7 @@ export default function Settings() {
 
   useEffect(() => {
     load().catch((err) => setError(err.message));
+    api('/api/system').then(setRevision).catch(() => {});
   }, []);
 
   const percentCents = investors.reduce((sum, row) => sum + Math.round(Number(row.percentage || 0) * 100), 0);
@@ -160,6 +163,23 @@ export default function Settings() {
       await load();
     } catch (err) {
       setError(err.message);
+    }
+  }
+
+  async function runUpdate() {
+    setError('');
+    setMessage('');
+    setUpdating(true);
+    try {
+      const result = await api('/api/system/update', { method: 'POST' });
+      setRevision(result);
+      setMessage(result.status === 'current'
+        ? t('settings.updateNone')
+        : t('settings.updateDone', { note: result.subject || result.commit }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUpdating(false);
     }
   }
 
@@ -382,6 +402,14 @@ export default function Settings() {
           </label>
           <button className="btn primary" type="submit">{t('settings.change')}</button>
         </form>
+
+        <article className="card stack settings-span">
+          <h2>{t('settings.update')}</h2>
+          {revision?.subject ? <p>{revision.subject}</p> : null}
+          <button type="button" className="btn primary" onClick={runUpdate} disabled={updating}>
+            {updating ? t('settings.updating') : t('settings.updateButton')}
+          </button>
+        </article>
 
         <article className="card stack">
           <h2>{t('settings.storageTitle')}</h2>
