@@ -214,7 +214,7 @@ export default function Settings() {
           <button className="btn primary" type="submit">{t('settings.saveBusiness')}</button>
         </form>
 
-        <form className="card stack" onSubmit={savePartners}>
+        <form className="card stack settings-span" onSubmit={savePartners}>
           <div className="card-head">
             <h2>{t('settings.partners')}</h2>
             <button type="button" className="btn ghost tiny" onClick={splitEqually}>{t('settings.splitEqual')}</button>
@@ -243,6 +243,19 @@ export default function Settings() {
                   value={partner.percentage}
                   onChange={(event) => setInvestors((current) => current.map((row) => (
                     row.id === partner.id ? { ...row, percentage: event.target.value } : row
+                  )))}
+                  required
+                />
+              </label>
+              <label>
+                {t('settings.invested')}
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={partner.investment ?? ''}
+                  onChange={(event) => setInvestors((current) => current.map((row) => (
+                    row.id === partner.id ? { ...row, investment: event.target.value } : row
                   )))}
                   required
                 />

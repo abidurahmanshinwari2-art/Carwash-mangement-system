@@ -122,6 +122,7 @@ function mapInvestor(row) {
     id: row.id,
     name: row.name,
     percentage: row.percentage,
+    investment: money(row.investment || 0),
     sortOrder: row.sort_order,
   };
 }
@@ -183,6 +184,7 @@ export function init() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       percentage REAL NOT NULL CHECK (percentage >= 0 AND percentage <= 100),
+      investment REAL NOT NULL DEFAULT 0,
       sort_order INTEGER NOT NULL
     ) STRICT;
 
@@ -226,6 +228,10 @@ export function init() {
     CREATE INDEX IF NOT EXISTS idx_rent_paid ON rent_payments(paid_at);
     CREATE INDEX IF NOT EXISTS idx_tenants_room ON tenants(room_id, active);
   `);
+  const investorColumns = db.prepare('PRAGMA table_info(investors)').all();
+  if (!investorColumns.some((column) => column.name === 'investment')) {
+    db.exec('ALTER TABLE investors ADD COLUMN investment REAL NOT NULL DEFAULT 0');
+  }
   seed();
 }
 
@@ -390,10 +396,11 @@ export function saveInvestors(list) {
   if (!Array.isArray(list) || list.length !== 3) {
     throw new HttpError(400, 'Enter exactly three investment partners', 'partners.count');
   }
-  const cleaned = list.map((row, index) => ({
+  const cleaned = list.map((row) => ({
     id: Number(row.id),
     name: requireText(row.name, 'partnerName', 80),
     percentage: money(row.percentage),
+    investment: requireAmount(row.investment ?? 0, 'investment', { allowZero: true }),
   }));
   if (cleaned.some((row) => !Number.isInteger(row.id))) {
     throw new HttpError(400, 'Partner record is invalid', 'partners.invalid');
@@ -412,8 +419,8 @@ export function saveInvestors(list) {
 
   db.exec('BEGIN');
   try {
-    const update = db.prepare('UPDATE investors SET name = ?, percentage = ?, sort_order = ? WHERE id = ?');
-    cleaned.forEach((row, index) => update.run(row.name, row.percentage, index + 1, row.id));
+    const update = db.prepare('UPDATE investors SET name = ?, percentage = ?, investment = ?, sort_order = ? WHERE id = ?');
+    cleaned.forEach((row, index) => update.run(row.name, row.percentage, row.investment, index + 1, row.id));
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');

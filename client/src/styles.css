@@ -234,7 +234,7 @@ tfoot td { font-weight: 750; }
 .partner { display: grid; gap: 4px; }
 .settings-grid { grid-template-columns: 1fr 1fr; }
 .settings-span { grid-column: 1 / -1; }
-.partner-edit { display: grid; grid-template-columns: 1fr 140px; gap: 10px; }
+.partner-edit { display: grid; grid-template-columns: 1fr 120px 150px; gap: 10px; }
 .inline-add { display: grid; grid-template-columns: 1fr 160px auto; gap: 8px; }
 .ok-line { color: var(--green); font-weight: 700; }
 .warn-line { color: var(--red); font-weight: 700; }
