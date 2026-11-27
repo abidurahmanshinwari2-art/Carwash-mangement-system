@@ -13,20 +13,29 @@ if not errorlevel 1 (
   start "" "http://127.0.0.1:3001"
   exit /b 0
 )
-if not exist "node_modules" (
-  echo Installing ZAMZAM Carwash on %COMPUTERNAME%. This only happens once and needs internet.
-  call npm install
+if not exist "client\dist\index.html" (
+  echo The screen files are missing. Installing the prepare tools. This needs internet.
+  set NODE_ENV=
+  call npm install --include=dev
   if errorlevel 1 (
     echo Install failed.
     pause
     exit /b 1
   )
-)
-if not exist "client\dist\index.html" (
   echo Preparing ZAMZAM Carwash on %COMPUTERNAME%.
   call npm run build
   if errorlevel 1 (
     echo Prepare failed.
+    pause
+    exit /b 1
+  )
+)
+if not exist "node_modules\express\package.json" (
+  echo Installing ZAMZAM Carwash on %COMPUTERNAME%. This needs internet once.
+  set NODE_ENV=production
+  call npm install --omit=dev
+  if errorlevel 1 (
+    echo Install failed.
     pause
     exit /b 1
   )

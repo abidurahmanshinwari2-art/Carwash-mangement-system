@@ -12,9 +12,10 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-if not exist "node_modules" (
-  echo Installing. This only happens once and needs internet.
-  call npm install
+if not exist "node_modules\express\package.json" (
+  echo Installing. This needs internet once.
+  set NODE_ENV=production
+  call npm install --omit=dev
   if errorlevel 1 (
     echo Install failed.
     pause

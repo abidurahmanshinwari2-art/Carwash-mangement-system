@@ -7,12 +7,11 @@ The desk shows the name of the computer it is running on. Copy the folder to ano
 ## Open it on a customer PC
 
 1. Install the LTS version of [Node.js](https://nodejs.org) once.
-2. Copy this folder onto the computer.
-3. Double-click **Run.bat**.
+2. Download this project from GitHub and unzip it.
+3. Open the folder that contains **Run.bat**. If you see two folders with the same name, open the inner one.
+4. Double-click **Run.bat**.
 
-That installs the app the first time, starts the desk, and puts a **ZAMZAM Carwash** icon on the desktop. After that, open the desk from the icon. Leave the ZAMZAM window open while you work. Closing that window stops the desk.
-
-The first install needs the internet. Later use does not.
+The screen is already prepared, so the customer PC does not build it. The first open installs the desk and needs the internet once. It also puts a **ZAMZAM Carwash** icon on the desktop. After that, open the desk from the icon. Leave the ZAMZAM window open while you work. Closing that window stops the desk.
 
 ## Sign in
 
